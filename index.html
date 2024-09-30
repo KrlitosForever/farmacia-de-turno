@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Farmacias de Turno</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+      .card {
+        margin-bottom: 20px;
+      }
+      #map {
+        margin-top: 20px;
+        height: 500px;
+        border: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body class="bg-light">
+    <div class="container">
+      <h1 class="my-4 text-center text-primary">Farmacias de Turno</h1>
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <select id="comunaSelect" class="form-select">
+            <option value="">Selecciona una comuna</option>
+            <!-- Opciones de comunas se generan dinámicamente -->
+          </select>
+        </div>
+      </div>
+      <div class="row" id="pharmacyList">
+        <!-- Tarjetas de farmacias generadas dinámicamente -->
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+      $(document).ready(function () {
+        const apiUrl =
+          "https://midas.minsal.cl/farmacia_v2/WS/getLocalesTurnos.php";
+        let map;
+        let markers = [];
+        let comunas = [];
+
+        function initializeMap() {
+          map = L.map("map").setView([-33.4489, -70.6693], 12); // Centrado inicial en Santiago, Chile
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 18,
+          }).addTo(map);
+        }
+
+        function populateComunas(data) {
+          const comunaSelect = $("#comunaSelect");
+          comunaSelect.empty(); // Limpiar opciones anteriores
+          comunaSelect.append(
+            '<option value="">Selecciona una comuna</option>'
+          );
+
+          comunas = [
+            ...new Set(data.map((pharmacy) => pharmacy.comuna_nombre)),
+          ].sort();
+
+          comunas.forEach((comuna) => {
+            const option = `<option value="${comuna}">${comuna}</option>`;
+            comunaSelect.append(option);
+          });
+        }
+
+        function loadPharmacies(comuna = "") {
+          $.getJSON(apiUrl, function (data) {
+            $("#pharmacyList").empty();
+            markers.forEach((marker) => map.removeLayer(marker));
+            markers = [];
+
+            // Llenar el selector de comunas si es la primera carga
+            if (!comunas.length) {
+              populateComunas(data);
+            }
+
+            // Filtrar datos por comuna seleccionada
+            const filteredData = data.filter(
+              (pharmacy) => !comuna || pharmacy.comuna_nombre === comuna
+            );
+
+            filteredData.forEach((pharmacy) => {
+              const {
+                local_nombre,
+                comuna_nombre,
+                local_direccion,
+                funcionamiento_hora_apertura,
+                funcionamiento_hora_cierre,
+                local_lat,
+                local_lng,
+              } = pharmacy;
+
+              const card = `
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h5 class="card-title">${local_nombre}</h5>
+                                        <p class="card-text">Comuna: ${comuna_nombre}</p>
+                                        <p class="card-text">Dirección: ${local_direccion}</p>
+                                        <p class="card-text">Horario: ${funcionamiento_hora_apertura} - ${funcionamiento_hora_cierre}</p>
+                                        <a href="https://www.google.com/maps?q=${local_lat},${local_lng}" target="_blank" class="btn btn-primary">Ver en Google Maps</a>
+                                        <a href="https://www.waze.com/ul?ll=${local_lat},${local_lng}&navigate=yes" target="_blank" class="btn btn-secondary">Abrir en Waze</a>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+              $("#pharmacyList").append(card);
+
+              const marker = L.marker([local_lat, local_lng]).addTo(map);
+              marker.bindPopup(`<b>${local_nombre}</b><br>${local_direccion}`);
+              markers.push(marker);
+            });
+
+            if (comuna) {
+              const firstPharmacy = filteredData[0];
+              if (firstPharmacy) {
+                map.setView(
+                  [firstPharmacy.local_lat, firstPharmacy.local_lng],
+                  12
+                );
+              }
+            }
+          });
+        }
+
+        $("#comunaSelect").on("change", function () {
+          const comuna = $(this).val();
+          loadPharmacies(comuna);
+        });
+
+        initializeMap();
+        loadPharmacies(); // Cargar datos al inicio
+      });
+    </script>
+  </body>
+</html>
