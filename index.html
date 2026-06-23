@@ -1,25 +1,30 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <!-- Etiquetas esenciales -->
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Farmacias de Turno</title>
-  <meta name="description" content="Encuentra farmacias de turno cerca de ti en Chile. Selecciona tu localidad, visualiza en el mapa y obtén direcciones con un solo clic en Waze o Google Maps.">
+  <meta name="description"
+    content="Encuentra farmacias de turno cerca de ti en Chile. Selecciona tu localidad, visualiza en el mapa y obtén direcciones con un solo clic en Waze o Google Maps.">
   <!-- SEO Tags -->
-  <meta name="keywords" content="farmacias de turno, farmacias Chile, farmacias cerca, farmacias de emergencia, Chile, Waze, Google Maps, farmacia local, Ministerio de Salud Chile">
+  <meta name="keywords"
+    content="farmacias de turno, farmacias Chile, farmacias cerca, farmacias de emergencia, Chile, Waze, Google Maps, farmacia local, Ministerio de Salud Chile">
   <meta name="author" content="Carlos Carrasco Varas">
   <meta name="robots" content="index, follow">
   <!-- Open Graph para mejorar la vista en redes sociales -->
   <meta property="og:title" content="Farmacia de Turno - Encuentra farmacias de turno cerca de ti">
-  <meta property="og:description" content="Descubre rápidamente las farmacias de turno cercanas en tu localidad. Visualiza en el mapa y navega con un solo clic.">
+  <meta property="og:description"
+    content="Descubre rápidamente las farmacias de turno cercanas en tu localidad. Visualiza en el mapa y navega con un solo clic.">
   <meta property="og:image" content="https://cdn-icons-png.flaticon.com/512/4320/4320337.png">
   <meta property="og:url" content="https://farmacia-de-turno.clubinformatico.cl/">
   <meta property="og:type" content="website">
   <!-- Twitter Cards -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Farmacia de Turno - Encuentra farmacias de turno cerca de ti">
-  <meta name="twitter:description" content="Encuentra farmacias de turno en Chile fácilmente. Selecciona tu localidad y navega con Waze o Google Maps.">
+  <meta name="twitter:description"
+    content="Encuentra farmacias de turno en Chile fácilmente. Selecciona tu localidad y navega con Waze o Google Maps.">
   <meta name="twitter:image" content="https://cdn-icons-png.flaticon.com/512/4320/4320337.png">
   <!-- CSS de Bootstrap y Leaflet -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
@@ -28,9 +33,11 @@
     body {
       font-family: Arial, sans-serif;
     }
+
     .card {
       margin-bottom: 20px;
     }
+
     #map {
       margin-top: 20px;
       height: 500px;
@@ -38,6 +45,7 @@
     }
   </style>
 </head>
+
 <body class="bg-light">
   <div class="container">
     <h1 class="my-4 text-center text-primary">Farmacias de Turno</h1>
@@ -64,8 +72,22 @@
       let markersGroup;
       let comunas = [];
       let pharmaciesData = [];
+      let userLocation = null;
+
+      // Fórmula de Haversine para calcular distancia en km entre dos coordenadas
+      function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Radio de la Tierra en km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      }
 
       function initializeMap() {
+        // Coordenadas por defecto (Centro de Santiago)
         map = L.map("map").setView([-33.4489, -70.6693], 12);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           maxZoom: 18,
@@ -73,14 +95,24 @@
 
         markersGroup = L.layerGroup().addTo(map);
 
+        // Solicitar ubicación del usuario
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (position) => {
-              const { latitude, longitude } = position.coords;
-              map.setView([latitude, longitude], 13);
+              userLocation = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              };
+              map.setView([userLocation.lat, userLocation.lng], 13);
+
+              // Si ya cargaron los datos, forzamos un filtrado por cercanía
+              if (pharmaciesData.length > 0) {
+                loadPharmacies("", true);
+                document.getElementById("comunaSelect").value = "";
+              }
             },
             (error) => {
-              console.error('Error obteniendo la geolocalización:', error);
+              console.warn('Geolocalización denegada o no disponible:', error);
             }
           );
         }
@@ -88,125 +120,116 @@
 
       function populateComunas() {
         const comunaSelect = document.getElementById("comunaSelect");
-        comunaSelect.innerHTML = '';
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = 'Selecciona una comuna';
-        comunaSelect.appendChild(defaultOption);
+        comunaSelect.innerHTML = '<option value="">Selecciona una comuna</option>';
 
-        comunas = [...new Set(pharmaciesData.map((pharmacy) => pharmacy.comuna_nombre))].sort();
+        comunas = [...new Set(pharmaciesData.map((p) => p.comuna_nombre))].sort();
 
+        const fragment = document.createDocumentFragment();
         comunas.forEach((comuna) => {
           const option = document.createElement('option');
           option.value = comuna;
           option.textContent = comuna;
-          comunaSelect.appendChild(option);
+          fragment.appendChild(option);
         });
+        comunaSelect.appendChild(fragment);
       }
 
-      function loadPharmacies(comuna = "") {
+      function loadPharmacies(comuna = "", filterByLocation = false) {
         const pharmacyList = document.getElementById("pharmacyList");
-        pharmacyList.innerHTML = '';
-
         markersGroup.clearLayers();
 
-        const filteredData = pharmaciesData.filter(
-          (pharmacy) => !comuna || pharmacy.comuna_nombre === comuna
-        );
+        let filteredData = pharmaciesData;
 
-        if (filteredData.length === 0) {
-          pharmacyList.innerHTML = '<p class="text-center">No se encontraron farmacias para la comuna seleccionada.</p>';
-        } else {
-          filteredData.forEach((pharmacy) => {
-            const {
-              local_nombre,
-              comuna_nombre,
-              local_direccion,
-              funcionamiento_hora_apertura,
-              funcionamiento_hora_cierre,
-              local_lat,
-              local_lng,
-            } = pharmacy;
-
-            const colDiv = document.createElement('div');
-            colDiv.className = 'col-md-4';
-
-            const cardDiv = document.createElement('div');
-            cardDiv.className = 'card';
-
-            const cardBodyDiv = document.createElement('div');
-            cardBodyDiv.className = 'card-body';
-
-            const cardTitle = document.createElement('h5');
-            cardTitle.className = 'card-title';
-            cardTitle.textContent = local_nombre;
-
-            const comunaText = document.createElement('p');
-            comunaText.className = 'card-text';
-            comunaText.textContent = `Comuna: ${comuna_nombre}`;
-
-            const direccionText = document.createElement('p');
-            direccionText.className = 'card-text';
-            direccionText.textContent = `Dirección: ${local_direccion}`;
-
-            const horarioText = document.createElement('p');
-            horarioText.className = 'card-text';
-            horarioText.textContent = `Horario: ${funcionamiento_hora_apertura} - ${funcionamiento_hora_cierre}`;
-
-            const googleMapsLink = document.createElement('a');
-            googleMapsLink.href = `https://www.google.com/maps?q=${local_lat},${local_lng}`;
-            googleMapsLink.target = '_blank';
-            googleMapsLink.className = 'btn btn-primary';
-            googleMapsLink.textContent = 'Ver en Google Maps';
-
-            const wazeLink = document.createElement('a');
-            wazeLink.href = `https://www.waze.com/ul?ll=${local_lat},${local_lng}&navigate=yes`;
-            wazeLink.target = '_blank';
-            wazeLink.className = 'btn btn-secondary ms-2';
-            wazeLink.textContent = 'Abrir en Waze';
-
-            cardBodyDiv.appendChild(cardTitle);
-            cardBodyDiv.appendChild(comunaText);
-            cardBodyDiv.appendChild(direccionText);
-            cardBodyDiv.appendChild(horarioText);
-            cardBodyDiv.appendChild(googleMapsLink);
-            cardBodyDiv.appendChild(wazeLink);
-
-            cardDiv.appendChild(cardBodyDiv);
-            colDiv.appendChild(cardDiv);
-            pharmacyList.appendChild(colDiv);
-
-            const marker = L.marker([local_lat, local_lng]);
-            marker.bindPopup(`<b>${local_nombre}</b><br>${local_direccion}`);
-            markersGroup.addLayer(marker);
-          });
+        // Filtrar por comuna si se seleccionó una
+        if (comuna) {
+          filteredData = filteredData.filter(p => p.comuna_nombre === comuna);
+        }
+        // Si no hay comuna pero tenemos ubicación, filtramos las más cercanas (radio 15km)
+        else if (filterByLocation && userLocation) {
+          filteredData = filteredData.map(p => {
+            p.distance = calculateDistance(userLocation.lat, userLocation.lng, p.local_lat, p.local_lng);
+            return p;
+          }).filter(p => p.distance <= 15) // Rango de 15 kilómetros
+            .sort((a, b) => a.distance - b.distance); // Ordenar por cercanía
         }
 
+        if (filteredData.length === 0) {
+          pharmacyList.innerHTML = '<p class="text-center mt-3">No se encontraron farmacias con los criterios actuales.</p>';
+          return;
+        }
+
+        let htmlCards = '';
+
+        filteredData.forEach((pharmacy) => {
+          // Prevenir errores si la API devuelve coordenadas vacías
+          if (!pharmacy.local_lat || !pharmacy.local_lng) return;
+
+          // Construcción del HTML usando Template Literals (más limpio y rápido)
+          htmlCards += `
+            <div class="col-md-4">
+              <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                  <h5 class="card-title text-primary">${pharmacy.local_nombre}</h5>
+                  <p class="card-text mb-1"><strong>Comuna:</strong> ${pharmacy.comuna_nombre}</p>
+                  <p class="card-text mb-1"><strong>Dirección:</strong> ${pharmacy.local_direccion}</p>
+                  <p class="card-text mb-3"><strong>Horario:</strong> ${pharmacy.funcionamiento_hora_apertura} - ${pharmacy.funcionamiento_hora_cierre}</p>
+                  
+                  <div class="d-grid gap-2 d-md-block">
+                    <a href="https://www.google.com/maps/search/?api=1&query=${pharmacy.local_lat},${pharmacy.local_lng}" target="_blank" class="btn btn-primary btn-sm">Ver en Google Maps</a>
+                    <a href="https://www.waze.com/ul?ll=${pharmacy.local_lat},${pharmacy.local_lng}&navigate=yes" target="_blank" class="btn btn-secondary btn-sm">Abrir en Waze</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+
+          // Agregar marcador al mapa
+          const marker = L.marker([pharmacy.local_lat, pharmacy.local_lng]);
+          marker.bindPopup(`<b>${pharmacy.local_nombre}</b><br>${pharmacy.local_direccion}`);
+          markersGroup.addLayer(marker);
+        });
+
+        // Inserción única en el DOM
+        pharmacyList.innerHTML = htmlCards;
+
+        // Ajustar la vista del mapa según los resultados
         if (comuna && filteredData.length > 0) {
-          const firstPharmacy = filteredData[0];
-          map.setView([firstPharmacy.local_lat, firstPharmacy.local_lng], 13);
+          map.setView([filteredData[0].local_lat, filteredData[0].local_lng], 13);
+        } else if (filterByLocation && userLocation) {
+          // Se mantiene la vista en la ubicación del usuario si se filtró por GPS
+          map.setView([userLocation.lat, userLocation.lng], 12);
         }
       }
 
       document.getElementById("comunaSelect").addEventListener("change", function () {
         const comuna = this.value;
-        loadPharmacies(comuna);
+        // Al seleccionar manualmente, desactivamos el filtro automático por GPS
+        loadPharmacies(comuna, false);
       });
 
       initializeMap();
 
+      // Carga inicial de datos
       fetch(apiUrl)
         .then(response => response.json())
         .then(data => {
           pharmaciesData = data;
           populateComunas();
-          loadPharmacies();
+
+          // Render inicial: Si ya tenemos la ubicación cargada (rápida), filtramos. 
+          // Si no, cargamos todo de momento.
+          if (userLocation) {
+            loadPharmacies("", true);
+          } else {
+            loadPharmacies();
+          }
         })
         .catch(error => {
-          console.error('Error al cargar los datos:', error);
-          document.getElementById("pharmacyList").innerHTML = '<p class="text-center text-danger">Error al cargar los datos. Por favor, intenta nuevamente más tarde.</p>';
+          console.error('Error al cargar los datos de MINSAL:', error);
+          document.getElementById("pharmacyList").innerHTML = '<p class="text-center text-danger mt-3">Error al cargar los datos. Por favor, intenta nuevamente más tarde.</p>';
         });
     });
   </script>
 </body>
+
 </html>
