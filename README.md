@@ -9,6 +9,8 @@
 - 📋 **Tarjeta informativa** con la dirección y datos relevantes de cada farmacia.
 - 🚗 **Navega fácilmente**: Con un solo clic, accede a **Waze** o **Google Maps** para obtener indicaciones precisas.
 - 🏛️ **Datos actualizados** desde el Ministerio de Salud de Chile para garantizar la información más reciente y precisa.
+- 📱 **Instalable (PWA)**: agrégala a tu pantalla de inicio y úsala offline gracias al Service Worker.
+- 🍏 **Diseño estilo iOS**: interfaz nativa, con soporte para modo claro/oscuro.
 
 ## 🎯 Objetivo del Proyecto
 

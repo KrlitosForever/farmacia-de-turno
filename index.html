@@ -4,7 +4,7 @@
 <head>
   <!-- Etiquetas esenciales -->
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Farmacias de Turno</title>
   <meta name="description"
     content="Encuentra farmacias de turno cerca de ti en Chile. Selecciona tu localidad, visualiza en el mapa y obtén direcciones con un solo clic en Waze o Google Maps.">
@@ -17,7 +17,7 @@
   <meta property="og:title" content="Farmacia de Turno - Encuentra farmacias de turno cerca de ti">
   <meta property="og:description"
     content="Descubre rápidamente las farmacias de turno cercanas en tu localidad. Visualiza en el mapa y navega con un solo clic.">
-  <meta property="og:image" content="https://cdn-icons-png.flaticon.com/512/4320/4320337.png">
+  <meta property="og:image" content="https://farmacia-de-turno.clubinformatico.cl/icons/icon-512.png">
   <meta property="og:url" content="https://farmacia-de-turno.clubinformatico.cl/">
   <meta property="og:type" content="website">
   <!-- Twitter Cards -->
@@ -25,42 +25,481 @@
   <meta name="twitter:title" content="Farmacia de Turno - Encuentra farmacias de turno cerca de ti">
   <meta name="twitter:description"
     content="Encuentra farmacias de turno en Chile fácilmente. Selecciona tu localidad y navega con Waze o Google Maps.">
-  <meta name="twitter:image" content="https://cdn-icons-png.flaticon.com/512/4320/4320337.png">
-  <!-- CSS de Bootstrap y Leaflet -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <meta name="twitter:image" content="https://farmacia-de-turno.clubinformatico.cl/icons/icon-512.png">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="icons/icon-square.svg">
+
+  <!-- iOS -->
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Farmacia Turno">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+
+  <!-- Mapa -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
   <style>
-    body {
-      font-family: Arial, sans-serif;
+    :root {
+      color-scheme: light dark;
+
+      /* Paleta iOS (light) */
+      --system-bg: #F2F2F7;
+      --grouped-bg: #FFFFFF;
+      --card-bg: #FFFFFF;
+      --text-primary: #1C1C1E;
+      --text-secondary: #6E6E73;
+      --separator: rgba(60, 60, 67, 0.16);
+      --accent: #0A84FF;
+      --accent-2: #00C7BE;
+      --success: #34C759;
+      --danger: #FF3B30;
+      --header-bg: rgba(242, 242, 247, 0.78);
+      --shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    .card {
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --system-bg: #000000;
+        --grouped-bg: #1C1C1E;
+        --card-bg: #1C1C1E;
+        --text-primary: #F5F5F7;
+        --text-secondary: #98989D;
+        --separator: rgba(84, 84, 88, 0.55);
+        --header-bg: rgba(0, 0, 0, 0.72);
+        --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--system-bg);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior-y: none;
+      padding-bottom: calc(24px + var(--safe-bottom));
+    }
+
+    a {
+      text-decoration: none;
+    }
+
+    /* Header estilo "large title" con blur */
+    header.app-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      padding: calc(10px + var(--safe-top)) 20px 12px;
+      background: var(--header-bg);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid var(--separator);
+    }
+
+    .app-title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+
+    .app-subtitle {
+      margin: 2px 0 0;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 16px 20px 0;
+    }
+
+    /* Toast de estado (offline / info) */
+    #statusToast {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      margin: 12px 0;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 500;
+      background: rgba(255, 59, 48, 0.12);
+      color: var(--danger);
+    }
+
+    #statusToast.show {
+      display: flex;
+    }
+
+    /* Selector de comuna, estilo iOS grouped list */
+    .filter-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .ios-select-wrap {
+      position: relative;
+      flex: 1;
+    }
+
+    select#comunaSelect {
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--grouped-bg);
+      color: var(--text-primary);
+      border: none;
+      border-radius: 14px;
+      padding: 13px 40px 13px 16px;
+      font-size: 16px;
+      font-family: inherit;
+      box-shadow: var(--shadow);
+    }
+
+    .ios-select-wrap::after {
+      content: "";
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--text-secondary);
+      border-bottom: 2px solid var(--text-secondary);
+      transform: translateY(-70%) rotate(45deg);
+      pointer-events: none;
+    }
+
+    .locate-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      flex-shrink: 0;
+      border: none;
+      border-radius: 14px;
+      background: var(--grouped-bg);
+      box-shadow: var(--shadow);
+      font-size: 19px;
+      cursor: pointer;
+      color: var(--accent);
+    }
+
+    .locate-btn:active {
+      opacity: 0.6;
+    }
+
+    .result-summary {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 4px 2px 16px;
+    }
+
+    /* Grid de tarjetas */
+    #pharmacyList {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .pharmacy-card {
+      background: var(--card-bg);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .pharmacy-card h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    .pill-open {
+      background: rgba(52, 199, 89, 0.15);
+      color: var(--success);
+    }
+
+    .pill-distance {
+      background: rgba(10, 132, 255, 0.12);
+      color: var(--accent);
+    }
+
+    .pharmacy-meta {
+      margin: 0;
+      font-size: 13.5px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .pharmacy-meta strong {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .btn-ios {
+      flex: 1;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-ios.primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-ios.secondary {
+      background: rgba(10, 132, 255, 0.12);
+      color: var(--accent);
+    }
+
+    .btn-ios:active {
+      opacity: 0.65;
+    }
+
+    .empty-state,
+    .error-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 40px 16px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .error-state {
+      color: var(--danger);
+    }
+
+    /* Skeleton de carga */
+    .skeleton-card {
+      background: var(--card-bg);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      height: 150px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .skeleton-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(120, 120, 128, 0.12), transparent);
+      transform: translateX(-100%);
+      animation: shimmer 1.3s infinite;
+    }
+
+    @keyframes shimmer {
+      100% {
+        transform: translateX(100%);
+      }
+    }
+
+    /* Mapa */
+    #mapWrap {
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
       margin-bottom: 20px;
     }
 
     #map {
-      margin-top: 20px;
-      height: 500px;
-      border: 1px solid #ccc;
+      height: 420px;
+      width: 100%;
+    }
+
+    .pin-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      background: linear-gradient(135deg, #0A84FF, #00C7BE);
+      border: 2px solid #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    }
+
+    footer.app-footer {
+      text-align: center;
+      padding: 12px 20px 4px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    footer.app-footer a {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Banner instalación iOS */
+    #iosInstallBanner {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: calc(12px + var(--safe-bottom));
+      z-index: 30;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      background: var(--card-bg);
+      border-radius: 18px;
+      padding: 14px 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    #iosInstallBanner.show {
+      display: flex;
+    }
+
+    #iosInstallBanner img {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+
+    #iosInstallBanner p {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      line-height: 1.35;
+      flex: 1;
+    }
+
+    #iosInstallBanner strong {
+      color: var(--text-primary);
+    }
+
+    #iosInstallClose {
+      border: none;
+      background: rgba(120, 120, 128, 0.16);
+      color: var(--text-secondary);
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      font-size: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    #androidInstallBtn {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      border: none;
+      background: var(--grouped-bg);
+      color: var(--accent);
+      box-shadow: var(--shadow);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 16px;
+      border-radius: 14px;
+      margin: 0 0 16px;
+      cursor: pointer;
+    }
+
+    #androidInstallBtn.show {
+      display: inline-flex;
     }
   </style>
 </head>
 
-<body class="bg-light">
-  <div class="container">
-    <h1 class="my-4 text-center text-primary">Farmacias de Turno</h1>
-    <div class="row mb-3">
-      <div class="col-md-4">
-        <select id="comunaSelect" class="form-select">
+<body>
+  <header class="app-header">
+    <h1 class="app-title">Farmacias de Turno</h1>
+    <p class="app-subtitle">Datos oficiales del Ministerio de Salud de Chile</p>
+  </header>
+
+  <main>
+    <div id="statusToast">Sin conexión: mostrando la última información disponible.</div>
+
+    <div class="filter-row">
+      <div class="ios-select-wrap">
+        <select id="comunaSelect">
           <option value="">Selecciona una comuna</option>
-          <!-- Opciones de comunas se generan dinámicamente -->
         </select>
       </div>
+      <button class="locate-btn" id="locateBtn" title="Usar mi ubicación" aria-label="Usar mi ubicación">📍</button>
     </div>
-    <div class="row" id="pharmacyList">
-      <!-- Tarjetas de farmacias generadas dinámicamente -->
+
+    <button id="androidInstallBtn">⬇️ Instalar app</button>
+
+    <p class="result-summary" id="resultSummary"></p>
+
+    <div id="pharmacyList">
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
     </div>
-    <div id="map"></div>
+
+    <div id="mapWrap">
+      <div id="map"></div>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    Farmacia de Turno · <a href="CHANGELOG.md">Changelog</a>
+  </footer>
+
+  <div id="iosInstallBanner">
+    <img src="icons/icon-192.png" alt="">
+    <p><strong>Instala Farmacia de Turno.</strong> Toca <strong>Compartir</strong> y luego <strong>“Agregar a
+        pantalla de inicio”</strong>.</p>
+    <button id="iosInstallClose" aria-label="Cerrar">✕</button>
   </div>
 
   <!-- Scripts de Leaflet -->
@@ -73,6 +512,14 @@
       let comunas = [];
       let pharmaciesData = [];
       let userLocation = null;
+
+      const pinIcon = L.divIcon({
+        className: '',
+        html: '<div class="pin-icon"></div>',
+        iconSize: [26, 26],
+        iconAnchor: [13, 26],
+        popupAnchor: [0, -26],
+      });
 
       // Fórmula de Haversine para calcular distancia en km entre dos coordenadas
       function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -89,33 +536,35 @@
       function initializeMap() {
         // Coordenadas por defecto (Centro de Santiago)
         map = L.map("map").setView([-33.4489, -70.6693], 12);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 18,
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap &copy; CARTO',
         }).addTo(map);
 
         markersGroup = L.layerGroup().addTo(map);
+        requestUserLocation();
+      }
 
-        // Solicitar ubicación del usuario
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              userLocation = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude
-              };
-              map.setView([userLocation.lat, userLocation.lng], 13);
+      function requestUserLocation() {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            userLocation = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            };
+            map.setView([userLocation.lat, userLocation.lng], 13);
 
-              // Si ya cargaron los datos, forzamos un filtrado por cercanía
-              if (pharmaciesData.length > 0) {
-                loadPharmacies("", true);
-                document.getElementById("comunaSelect").value = "";
-              }
-            },
-            (error) => {
-              console.warn('Geolocalización denegada o no disponible:', error);
+            // Si ya cargaron los datos, forzamos un filtrado por cercanía
+            if (pharmaciesData.length > 0) {
+              loadPharmacies("", true);
+              document.getElementById("comunaSelect").value = "";
             }
-          );
-        }
+          },
+          (error) => {
+            console.warn('Geolocalización denegada o no disponible:', error);
+          }
+        );
       }
 
       function populateComunas() {
@@ -136,6 +585,7 @@
 
       function loadPharmacies(comuna = "", filterByLocation = false) {
         const pharmacyList = document.getElementById("pharmacyList");
+        const resultSummary = document.getElementById("resultSummary");
         markersGroup.clearLayers();
 
         let filteredData = pharmaciesData;
@@ -154,47 +604,60 @@
         }
 
         if (filteredData.length === 0) {
-          pharmacyList.innerHTML = '<p class="text-center mt-3">No se encontraron farmacias con los criterios actuales.</p>';
+          pharmacyList.innerHTML = '<div class="empty-state">No se encontraron farmacias con los criterios actuales.</div>';
+          resultSummary.textContent = '';
           return;
         }
 
+        resultSummary.textContent = filterByLocation && userLocation && !comuna
+          ? `${filteredData.length} farmacias de turno cerca de ti`
+          : `${filteredData.length} farmacias de turno`;
+
         let htmlCards = '';
 
-        filteredData.forEach((pharmacy) => {
-          // Prevenir errores si la API devuelve coordenadas vacías
-          if (!pharmacy.local_lat || !pharmacy.local_lng) return;
+        let firstValidCoords = null;
 
-          // Construcción del HTML usando Template Literals (más limpio y rápido)
+        filteredData.forEach((pharmacy) => {
+          // Prevenir errores si la API devuelve coordenadas vacías o mal formadas
+          // (la API de MINSAL a veces entrega valores como "-34.58,")
+          const lat = parseFloat(pharmacy.local_lat);
+          const lng = parseFloat(pharmacy.local_lng);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          if (!firstValidCoords) firstValidCoords = [lat, lng];
+
+          const distanceBadge = typeof pharmacy.distance === 'number'
+            ? `<span class="pill pill-distance">${pharmacy.distance.toFixed(1)} km</span>`
+            : '';
+
           htmlCards += `
-            <div class="col-md-4">
-              <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                  <h5 class="card-title text-primary">${pharmacy.local_nombre}</h5>
-                  <p class="card-text mb-1"><strong>Comuna:</strong> ${pharmacy.comuna_nombre}</p>
-                  <p class="card-text mb-1"><strong>Dirección:</strong> ${pharmacy.local_direccion}</p>
-                  <p class="card-text mb-3"><strong>Horario:</strong> ${pharmacy.funcionamiento_hora_apertura} - ${pharmacy.funcionamiento_hora_cierre}</p>
-                  
-                  <div class="d-grid gap-2 d-md-block">
-                    <a href="https://www.google.com/maps/search/?api=1&query=${pharmacy.local_lat},${pharmacy.local_lng}" target="_blank" class="btn btn-primary btn-sm">Ver en Google Maps</a>
-                    <a href="https://www.waze.com/ul?ll=${pharmacy.local_lat},${pharmacy.local_lng}&navigate=yes" target="_blank" class="btn btn-secondary btn-sm">Abrir en Waze</a>
-                  </div>
-                </div>
+            <div class="pharmacy-card">
+              <div class="badge-row">
+                <span class="pill pill-open">🟢 De turno</span>
+                ${distanceBadge}
+              </div>
+              <h3>${pharmacy.local_nombre}</h3>
+              <p class="pharmacy-meta"><strong>Comuna:</strong> ${pharmacy.comuna_nombre}</p>
+              <p class="pharmacy-meta"><strong>Dirección:</strong> ${pharmacy.local_direccion}</p>
+              <p class="pharmacy-meta"><strong>Horario:</strong> ${pharmacy.funcionamiento_hora_apertura} - ${pharmacy.funcionamiento_hora_cierre}</p>
+              <div class="card-actions">
+                <a class="btn-ios primary" href="https://www.google.com/maps/search/?api=1&query=${lat},${lng}" target="_blank" rel="noopener">Google Maps</a>
+                <a class="btn-ios secondary" href="https://www.waze.com/ul?ll=${lat},${lng}&navigate=yes" target="_blank" rel="noopener">Waze</a>
               </div>
             </div>
           `;
 
           // Agregar marcador al mapa
-          const marker = L.marker([pharmacy.local_lat, pharmacy.local_lng]);
+          const marker = L.marker([lat, lng], { icon: pinIcon });
           marker.bindPopup(`<b>${pharmacy.local_nombre}</b><br>${pharmacy.local_direccion}`);
           markersGroup.addLayer(marker);
         });
 
         // Inserción única en el DOM
-        pharmacyList.innerHTML = htmlCards;
+        pharmacyList.innerHTML = htmlCards || '<div class="empty-state">No se encontraron farmacias con los criterios actuales.</div>';
 
         // Ajustar la vista del mapa según los resultados
-        if (comuna && filteredData.length > 0) {
-          map.setView([filteredData[0].local_lat, filteredData[0].local_lng], 13);
+        if (comuna && firstValidCoords) {
+          map.setView(firstValidCoords, 13);
         } else if (filterByLocation && userLocation) {
           // Se mantiene la vista en la ubicación del usuario si se filtró por GPS
           map.setView([userLocation.lat, userLocation.lng], 12);
@@ -207,6 +670,11 @@
         loadPharmacies(comuna, false);
       });
 
+      document.getElementById("locateBtn").addEventListener("click", function () {
+        document.getElementById("comunaSelect").value = "";
+        requestUserLocation();
+      });
+
       initializeMap();
 
       // Carga inicial de datos
@@ -216,7 +684,7 @@
           pharmaciesData = data;
           populateComunas();
 
-          // Render inicial: Si ya tenemos la ubicación cargada (rápida), filtramos. 
+          // Render inicial: Si ya tenemos la ubicación cargada (rápida), filtramos.
           // Si no, cargamos todo de momento.
           if (userLocation) {
             loadPharmacies("", true);
@@ -226,8 +694,58 @@
         })
         .catch(error => {
           console.error('Error al cargar los datos de MINSAL:', error);
-          document.getElementById("pharmacyList").innerHTML = '<p class="text-center text-danger mt-3">Error al cargar los datos. Por favor, intenta nuevamente más tarde.</p>';
+          document.getElementById("pharmacyList").innerHTML = '<div class="error-state">Error al cargar los datos. Por favor, intenta nuevamente más tarde.</div>';
         });
+
+      // --- Estado de conexión ---
+      const statusToast = document.getElementById('statusToast');
+      function updateConnectionStatus() {
+        statusToast.classList.toggle('show', !navigator.onLine);
+      }
+      window.addEventListener('online', updateConnectionStatus);
+      window.addEventListener('offline', updateConnectionStatus);
+      updateConnectionStatus();
+
+      // --- Instalación en iOS (banner con instrucciones) ---
+      const isIos = /iP(hone|od|ad)/.test(navigator.userAgent) && !window.MSStream;
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      const iosBanner = document.getElementById('iosInstallBanner');
+
+      if (isIos && !isStandalone && !localStorage.getItem('iosInstallDismissed')) {
+        setTimeout(() => iosBanner.classList.add('show'), 1500);
+      }
+      document.getElementById('iosInstallClose').addEventListener('click', () => {
+        iosBanner.classList.remove('show');
+        localStorage.setItem('iosInstallDismissed', '1');
+      });
+
+      // --- Instalación en Android/Chrome ---
+      let deferredPrompt;
+      const androidBtn = document.getElementById('androidInstallBtn');
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredPrompt = event;
+        androidBtn.classList.add('show');
+      });
+      androidBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        androidBtn.classList.remove('show');
+      });
+      window.addEventListener('appinstalled', () => {
+        androidBtn.classList.remove('show');
+      });
+
+      // --- Service Worker ---
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js').catch((err) => {
+            console.warn('No se pudo registrar el Service Worker:', err);
+          });
+        });
+      }
     });
   </script>
 </body>
